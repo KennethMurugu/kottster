@@ -1,6 +1,8 @@
-import { FilterItem } from "./filter.model";
-import { FieldInput } from "./fieldInput.model";
-import { OneToManyRelationship, Relationship } from "./relationship.model";
+import { FilterItem } from './filter.model';
+import { FieldInput } from './fieldInput.model';
+import { OneToManyRelationship, Relationship } from './relationship.model';
+import { PagePermissions } from './pagePermissions.model';
+import { User } from './user.model';
 
 export interface TablePageInputBase {}
 
@@ -16,7 +18,7 @@ export interface TablePageInputSelect extends TablePageInputBase {
     direction: 'asc' | 'desc';
   };
   filters?: FilterItem[];
-  
+
   // TODO: Add many-to-many relation support
   getByForeignRecord?: {
     relationship: OneToManyRelationship;
@@ -75,9 +77,9 @@ export interface TablePageConfigColumn {
 
   /** Suffix for the column value (goes after the value) */
   suffix?: string;
-  
-  /** 
-   * Whether the column is hidden in the table 
+
+  /**
+   * Whether the column is hidden in the table
    * @default false
    */
   hiddenInTable?: boolean;
@@ -90,8 +92,8 @@ export interface TablePageConfigColumn {
 
   /** Whether the column is filterable */
   filterable?: boolean;
-  
-  /** 
+
+  /**
    * Whether the column is hidden in the form
    * @default false
    */
@@ -102,34 +104,34 @@ export interface TablePageConfigColumn {
    */
   fieldInput?: FieldInput;
 
-  /** 
+  /**
    * Validation rule for the column
    */
   fieldRequirement?: string | keyof typeof TablePageFieldRequirement;
 
   /** Grid field span for the field in the form (12, 8, 6, 4) */
   formFieldSpan?: string;
-  
+
   /** If the column is a foreign key, this specifies the column in the related table to be displayed as the label */
   relationshipPreviewColumns?: string[];
-  
+
   /** Client-side index of the column in the table */
   position?: number;
 
-  /** 
-   * Client-side custom render function for the column 
-   * 
+  /**
+   * Client-side custom render function for the column
+   *
    * @param record - The record object containing all columns
    * @param recordIndex - The index of the record in the current page
    * @param data - Additional data including all records and total count
-   * 
+   *
    * @example render: (record) => <span>{record.first_name} {record.last_name}</span>
-   * 
+   *
    * @returns The rendered React element or content for the column
    */
   render?: (
     record: TablePageResultSelectRecord,
-    recordIndex: number, 
+    recordIndex: number,
     data: {
       records: TablePageResultSelectRecord[];
       totalRecords: number;
@@ -166,7 +168,7 @@ export interface TablePageConfig {
 
   allowInsert?: boolean;
   beforeInsert?: (record: Record<string, any>) => Record<string, any>;
-  canBeInserted?: (record: Record<string, any>) => boolean;
+  canBeInserted?: (record: Record<string, any>) => Promise<boolean>;
 
   allowUpdate?: boolean;
   beforeUpdate?: (record: Record<string, any>) => Record<string, any>;
@@ -174,6 +176,7 @@ export interface TablePageConfig {
 
   allowDelete?: boolean;
   canBeDeleted?: (record: Record<string, any>) => boolean;
+  afterDelete?: (record: Record<string, any>) => any;
 
   /** Column name to sort by default */
   defaultSortColumn?: string;
@@ -189,14 +192,19 @@ export interface TablePageConfig {
 
   // Will be typed as Knex.Where in @kottster/server
   knexQueryModifier?: any;
+
+  getPermissions?: (user: User) => Promise<PagePermissions>;
 }
 
 export type TablePageResultSelectRecord = Record<string, any>;
 
-export type TablePageResultSelectRecordLinkedDTO = Record<string, {
-  records?: TablePageResultSelectRecord[];
-  totalRecords?: number;
-}>;
+export type TablePageResultSelectRecordLinkedDTO = Record<
+  string,
+  {
+    records?: TablePageResultSelectRecord[];
+    totalRecords?: number;
+  }
+>;
 
 export interface TablePageResultSelectDTO {
   records?: TablePageResultSelectRecord[];

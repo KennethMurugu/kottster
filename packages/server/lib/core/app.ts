@@ -1,6 +1,24 @@
 import { ExtendAppContextFunction } from '../models/appContext.model';
 import { PROJECT_DIR } from '../constants/projectDir';
-import { AppSchema, checkTsUsage, DataSource, JWTTokenPayload, Stage, User, RpcActionBody, TablePageInputSelect, TablePageInputDelete, TablePageInputUpdate, TablePageInputInsert, isSchemaEmpty, schemaPlaceholder, ApiResponse, TablePageInputSelectSingle, PageSettings, pageSettingsTablePageKey } from '@kottster/common';
+import {
+  AppSchema,
+  checkTsUsage,
+  DataSource,
+  JWTTokenPayload,
+  Stage,
+  User,
+  RpcActionBody,
+  TablePageInputSelect,
+  TablePageInputDelete,
+  TablePageInputUpdate,
+  TablePageInputInsert,
+  isSchemaEmpty,
+  schemaPlaceholder,
+  ApiResponse,
+  TablePageInputSelectSingle,
+  PageSettings,
+  pageSettingsTablePageKey,
+} from '@kottster/common';
 import { DataSourceRegistry } from './dataSourceRegistry';
 import { ActionService } from '../services/action.service';
 import * as jose from 'jose';
@@ -10,6 +28,7 @@ import { parse as parseCookie } from 'cookie';
 import { SafePageSettings } from '../models/safePageSettings.model';
 import { Request, Response, NextFunction } from 'express';
 import { createServer } from '../factories/createServer';
+import { PagePermissions } from '@kottster/common/dist/models/pagePermissions.model';
 
 type RequestHandler = (req: Request, res: Response, next: NextFunction) => void;
 
@@ -19,10 +38,10 @@ export interface KottsterAppOptions {
   secretKey?: string;
   schema: AppSchema | Record<string, never>;
 
-  /** 
+  /**
    * Custom validation middleware
    * @description This middleware will be called after the JWT token is validated. You can use it to perform additional checks or modify the request object.
-   * @example https://kottster.app/docs/security/authentication#custom-validation-middleware 
+   * @example https://kottster.app/docs/security/authentication#custom-validation-middleware
    */
   postAuthMiddleware?: PostAuthMiddleware;
 
@@ -52,7 +71,7 @@ export class KottsterApp {
   public schema: AppSchema;
   private customEnsureValidToken?: (request: Request) => Promise<EnsureValidTokenResponse>;
   private postAuthMiddleware?: PostAuthMiddleware;
-  
+
   public extendContext: ExtendAppContextFunction;
 
   constructor(options: KottsterAppOptions) {
@@ -72,14 +91,14 @@ export class KottsterApp {
   public registerDataSources(registry: DataSourceRegistry<{}>) {
     this.dataSources = Object.values(registry.dataSources);
 
-    this.dataSources.forEach(dataSource => {
+    this.dataSources.forEach((dataSource) => {
       const adapter = dataSource.adapter as DataSourceAdapter;
 
       if (this) {
         adapter.setApp(this);
         adapter.setTablesConfig(dataSource.tablesConfig);
         adapter.connect();
-      };
+      }
     });
   }
 
@@ -110,10 +129,10 @@ export class KottsterApp {
         next();
         return;
       }
-  
+
       try {
         const result = await this.handleInternalApiRequest(req);
-        
+
         if (result) {
           res.setHeader('Content-Type', 'application/json');
           res.status(200).json(result);
@@ -127,7 +146,7 @@ export class KottsterApp {
         res.status(500).json({ error: 'Internal Server Error' });
         return;
       }
-    }
+    };
   }
 
   /**
@@ -141,10 +160,10 @@ export class KottsterApp {
         next();
         return;
       }
-  
+
       try {
         const result = await this.handleDevSyncApiRequest(req);
-        
+
         if (result) {
           res.setHeader('Content-Type', 'application/json');
           res.status(200).json(result);
@@ -158,32 +177,32 @@ export class KottsterApp {
         res.status(500).json({ error: 'Internal Server Error' });
         return;
       }
-    }
+    };
   }
 
   private async handleInternalApiRequest(request: Request): Promise<any> {
     let result: ApiResponse;
-    
+
     try {
       const { isTokenValid, newRequest, invalidTokenErrorMessage } = await this.ensureValidToken(request);
       if (!isTokenValid) {
         throw new Error(`Invalid JWT token: ${invalidTokenErrorMessage}`);
       }
-      
+
       const action = newRequest.query.action as string | undefined;
       const actionData = newRequest.body;
-  
+
       if (!action) {
         throw new Error('Action not found in request');
       }
-  
+
       result = {
         status: 'success',
         result: await this.executeAction(action, actionData),
       };
     } catch (error) {
       console.error('Error handling Kottster API request:', error);
-      
+
       result = {
         status: 'error',
         error: error.message,
@@ -195,22 +214,25 @@ export class KottsterApp {
 
   private async handleDevSyncApiRequest(request: Request): Promise<any> {
     let result: ApiResponse;
-    
+
     try {
       const action = request.query.action as string | undefined;
       const actionData = request.body;
-  
+
       if (!action) {
-        return new Response('Action not found in request', { status: 400, headers: commonHeaders });
+        return new Response('Action not found in request', {
+          status: 400,
+          headers: commonHeaders,
+        });
       }
-  
+
       result = {
         status: 'success',
         result: await this.executeDevSyncAction(action, actionData),
       };
     } catch (error) {
       console.error('Error handling Kottster API request:', error);
-      
+
       result = {
         status: 'error',
         error: error.message,
@@ -225,9 +247,7 @@ export class KottsterApp {
    * @param procedures The procedures
    * @returns The express request handler
    */
-  public defineCustomController<T extends Record<string, (input: any) => any>>(
-    procedures: T
-  ): RequestHandler & { procedures: T } {
+  public defineCustomController<T extends Record<string, (input: any) => any>>(procedures: T): RequestHandler & { procedures: T } {
     const func: RequestHandler = async (req, res) => {
       const { isTokenValid, newRequest, invalidTokenErrorMessage } = await this.ensureValidToken(req);
       if (!isTokenValid) {
@@ -235,7 +255,7 @@ export class KottsterApp {
         return;
       }
 
-      const body = await newRequest.body as RpcActionBody<'custom'>;
+      const body = (await newRequest.body) as RpcActionBody<'custom'>;
       const { procedure, procedureInput } = body.input;
 
       if (procedure in procedures) {
@@ -272,16 +292,12 @@ export class KottsterApp {
    * @param pageSettings The page settings
    * @returns The express request handler
    */
-  public defineTableController<T extends Record<string, (input: any) => any>>(
-    dataSource: DataSource, 
-    pageSettings: SafePageSettings,
-    procedures?: T
-  ): RequestHandler  & { procedures: T } {
+  public defineTableController<T extends Record<string, (input: any) => any>>(dataSource: DataSource, pageSettings: SafePageSettings, procedures?: T): RequestHandler & { procedures: T } {
     const typesPageSettings = pageSettings as PageSettings;
 
     const func: RequestHandler = async (req, res, next) => {
       // If the request is a custom one, handle it by the custom controller
-      const body = await req.body as RpcActionBody<'custom'>;
+      const body = (await req.body) as RpcActionBody<'custom'>;
       const action = body.action;
       if (action === 'custom') {
         return this.defineCustomController(procedures as T)(req, res, next);
@@ -311,20 +327,31 @@ export class KottsterApp {
     (func as any).procedures = procedures;
 
     return func as RequestHandler & { procedures: T };
-  };
+  }
 
   private async processTableControllerRequest(dataSource: DataSource, request: Request, pageSettings: PageSettings): Promise<any> {
     const tablePageConfig = pageSettings[pageSettingsTablePageKey];
 
     const { isTokenValid, newRequest, invalidTokenErrorMessage } = await this.ensureValidToken(request);
+
     if (!isTokenValid) {
       throw new Error(`Invalid JWT token: ${invalidTokenErrorMessage}`);
     }
 
-    const body = await newRequest.body as RpcActionBody<'page_settings' | 'table_select' | 'table_selectOne' | 'table_insert' | 'table_update' | 'table_delete'>;
+    const body = (await newRequest.body) as RpcActionBody<'page_settings' | 'table_select' | 'table_selectOne' | 'table_insert' | 'table_update' | 'table_delete'>;
+
+    const user = newRequest['user'] as User;
+    const permissions: PagePermissions = (await pageSettings.rootTable.getPermissions?.(user)) ?? {
+      allowInsert: pageSettings.rootTable.allowInsert,
+      allowUpdate: pageSettings.rootTable.allowUpdate,
+      allowDelete: pageSettings.rootTable.allowDelete,
+    };
 
     try {
       if (body.action === 'page_settings') {
+        pageSettings.rootTable.allowInsert = permissions.allowInsert;
+        pageSettings.rootTable.allowUpdate = permissions.allowUpdate;
+        pageSettings.rootTable.allowDelete = permissions.allowDelete;
         return pageSettings;
       } else {
         const dataSourceAdapter = dataSource.adapter as DataSourceAdapter;
@@ -345,7 +372,7 @@ export class KottsterApp {
         } else if (body.action === 'table_delete') {
           const result = await dataSourceAdapter.deleteTableRecords(body.input as TablePageInputDelete, databaseSchema, tablePageConfig);
           return result;
-        };
+        }
       }
     } catch (error) {
       throw new Error(error);
@@ -357,15 +384,15 @@ export class KottsterApp {
   private async getDataFromToken(token: string) {
     const { payload } = await jose.jwtVerify(token, new TextEncoder().encode(this.secretKey));
     const decodedToken = payload as unknown as JWTTokenPayload;
-  
+
     const user: User = {
       id: decodedToken.userId,
       email: decodedToken.userEmail,
     };
-  
-    return { 
+
+    return {
       appId: decodedToken.appId,
-      user 
+      user,
     };
   }
 
@@ -382,11 +409,19 @@ export class KottsterApp {
       token = cookieData.jwtToken;
     }
     if (!token) {
-      return { isTokenValid: false, newRequest: request, invalidTokenErrorMessage: 'Invalid JWT token: token not passed' };
+      return {
+        isTokenValid: false,
+        newRequest: request,
+        invalidTokenErrorMessage: 'Invalid JWT token: token not passed',
+      };
     }
 
     if (!this.secretKey) {
-      return { isTokenValid: false, newRequest: request, invalidTokenErrorMessage: 'Invalid JWT token: secret key not set' };
+      return {
+        isTokenValid: false,
+        newRequest: request,
+        invalidTokenErrorMessage: 'Invalid JWT token: secret key not set',
+      };
     }
 
     try {
@@ -394,7 +429,7 @@ export class KottsterApp {
       if (String(appId) !== String(this.appId)) {
         throw new Error('Invalid JWT token: invalid app ID');
       }
-      
+
       const newRequest = request as Request & { user?: User };
       newRequest.user = user;
 
@@ -402,10 +437,14 @@ export class KottsterApp {
       if (this.postAuthMiddleware) {
         await this.postAuthMiddleware(user, newRequest);
       }
-      
+
       return { isTokenValid: true, newRequest };
     } catch (error) {
-      return { isTokenValid: false, newRequest: request, invalidTokenErrorMessage: error.message };
+      return {
+        isTokenValid: false,
+        newRequest: request,
+        invalidTokenErrorMessage: error.message,
+      };
     }
   }
 
